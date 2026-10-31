@@ -1,0 +1,48 @@
+# Virtual environment
+.venv/
+venv/
+env/
+.env/
+
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Django
+db.sqlite3
+*.log
+staticfiles/
+media/
+
+# Secrets
+.env
+*.env.local
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+#Agent
+CLAUDE.md
+.claude/
+
+#Frontend
+frontend/
+
+#Doku
+endpoints_doc.txt
+
+#Testing
+.postman
+postman/
+
+#Migrations
+*/migrations/*
+!*/migrations/__init__.py
