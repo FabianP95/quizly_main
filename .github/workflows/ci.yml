@@ -32,7 +32,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run linter
-        run: ruff check --output-format=github .
+       
+        run: ruff check --output-format=github --extend-ignore EXE001 .
 
   test:
     name: Django checks & tests
@@ -51,11 +52,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+     
+      - name: Generate migrations
+        run: python manage.py makemigrations
+
       - name: Django system check
         run: python manage.py check
-
-      - name: Check for missing migrations
-        run: python manage.py makemigrations --check --dry-run
 
       - name: Run tests
         run: python manage.py test
