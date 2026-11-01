@@ -17,12 +17,16 @@ The frontend is maintained separately and is not part of this repository.
 
 ```
 quizly_main/
-├── core/             # Project settings and root URL configuration
-├── user_auth_app/    # Custom user model, registration, login, logout
-├── quiz_app/         # Quiz generation and management
+├── .github/workflows/  # CI pipeline (lint + tests)
+├── core/               # Project settings and root URL configuration
+├── user_auth_app/      # Custom user model and authentication
+│   ├── api/            # Serializers, views, URLs, cookie JWT authentication
+│   └── tests/          # Tests for the authentication flow
+├── quiz_app/           # Quiz generation and management
 ├── manage.py
+├── pyproject.toml      # Ruff configuration
 ├── requirements.txt
-└── .env.template     # Template for environment variables
+└── .env.template       # Template for environment variables
 ```
 
 ## Installation
@@ -102,7 +106,72 @@ The API is now available at `http://127.0.0.1:8000/`, the admin panel at `http:/
 
 ## Authentication
 
-The API uses JWT authentication with **HttpOnly cookies**. On login the access token is set as a cookie, so the frontend never has direct access to the token. All endpoints require authentication by default unless stated otherwise.
+The API uses JWT authentication with **HttpOnly cookies**. On login the access and refresh tokens are set as cookies (`access_token`, `refresh_token`), so the frontend never has direct access to the tokens. All endpoints require authentication by default unless stated otherwise.
+
+| Token   | Lifetime  |
+| ------- | --------- |
+| Access  | 5 minutes |
+| Refresh | 1 day     |
+
+On logout the refresh token is blacklisted and both cookies are deleted.
+
+### Endpoints
+
+| Method | Endpoint              | Auth required | Description                                              |
+| ------ | --------------------- | ------------- | -------------------------------------------------------- |
+| POST   | `/api/register/`      | No            | Create a new user                                        |
+| POST   | `/api/login/`         | No            | Log in and set the auth cookies                          |
+| POST   | `/api/logout/`        | Yes           | Blacklist the refresh token and delete the auth cookies  |
+| POST   | `/api/token/refresh/` | No (cookie)   | Issue a new access token from the `refresh_token` cookie |
+
+**Register** – request body:
+
+```json
+{
+  "username": "your_username",
+  "password": "your_password",
+  "confirmed_password": "your_password",
+  "email": "your_email@example.com"
+}
+```
+
+Returns `201` on success, `400` with validation errors otherwise (e.g. passwords do not match, email already exists).
+
+**Login** – request body:
+
+```json
+{
+  "username": "your_username",
+  "password": "your_password"
+}
+```
+
+Returns `200` with the user data (`id`, `username`, `email`) and sets the cookies, `401` for invalid credentials.
+
+**Logout** / **Token refresh** – no request body, the cookies are sent automatically. Both return `401` if the `refresh_token` cookie is missing or invalid.
+
+## Testing & Linting
+
+Run the test suite:
+
+```bash
+python manage.py test
+```
+
+Run the linter (configured in `pyproject.toml`):
+
+```bash
+ruff check .
+```
+
+## Continuous Integration
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request to `main`:
+
+1. Lint with ruff
+2. Django system check
+3. Check for missing migrations
+4. Run the test suite
 
 ## Frontend Connection
 
