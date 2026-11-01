@@ -1,7 +1,7 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-
+from unittest.mock import patch
 from quiz_app.models import Question, Quiz
 from user_auth_app.models import User
 
@@ -85,11 +85,60 @@ class QuizListTests(QuizTestsBase):
 
     def test_get_only_own_quizzes(self):
         response = self.client.get(self.url, format="json")
-        self.assertEqual(response.data[0].id, self.quiz.id)
-        self.assertNotEqual(response.data[0].id, self.second_quiz.id)
+        self.assertEqual(response.data[0]["id"], self.quiz.id)
+        self.assertNotEqual(response.data[0]["id"], self.second_quiz.id)
 
     def test_get_questions_belonging_to_quiz(self):
         response = self.client.get(self.url, format="json")
-        self.assertEqual(len(response.data[0]["questions"], 2))
+        self.assertEqual(len(response.data[0]["questions"]), 2)
+        
+
+class QuizCreateTests(QuizTestsBase):
+    
+    def service_function_offline(self, *args, **kwargs):
+        
+        return create_quiz(self.user, "Offline Quiz")
+        
+    def test_create_quiz(self):
+        with patch(SERVICE_PATH, side_effect=self.service_function_offline) as mock:
+            response = self.client.post(
+                self.url, {"url": VIDEO_URL}, format="json"
+            )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock.assert_called_once()
+    
+    def test_create_quiz_result_keys(self):
+        with patch(SERVICE_PATH, side_effect=self.service_function_offline):
+            response = self.client.post(
+                self.url, {"url": VIDEO_URL}, format="json"
+            )
+        self.assertEqual(set(response.data.keys()), QUIZ_KEYS)
+        self.assertEqual(
+            set(response.data["questions"][0].keys()), QUESTION_KEYS_CREATE
+        )
+
+    def test_create_quiz_without_cookies(self):
+        self.client.cookies.clear()
+        response = self.client.post(
+            self.url, {"url": VIDEO_URL}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_create_quiz_missing_url(self):
+        response = self.client.post(self.url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_quiz_invalid_url(self):
+        response = self.client.post(
+            self.url, {"url": "not-a-url"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_quiz_non_youtube_url(self):
+        response = self.client.post(
+            self.url, {"url": "https://example.com/video"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
         
 
