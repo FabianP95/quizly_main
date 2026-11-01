@@ -11,7 +11,13 @@ The frontend is maintained separately and is not part of this repository.
 - Django REST Framework
 - Simple JWT (authentication via HttpOnly cookies)
 - django-cors-headers
+- yt-dlp (download audio from YouTube videos)
+- OpenAI Whisper (local audio transcription)
 - SQLite (development)
+
+### System requirements
+
+- [FFmpeg](https://ffmpeg.org/download.html) must be installed and available on the `PATH` – it is required by yt-dlp and Whisper to process the audio files.
 
 ## Project Structure
 
@@ -23,6 +29,10 @@ quizly_main/
 │   ├── api/            # Serializers, views, URLs, cookie JWT authentication
 │   └── tests/          # Tests for the authentication flow
 ├── quiz_app/           # Quiz generation and management
+│   ├── api/            # Serializers, views, URLs, services (YouTube download / transcription)
+│   ├── tests/          # Tests for the quiz endpoints
+│   └── models.py       # Quiz and Question models
+├── media/              # Temporary media files (e.g. downloaded audio)
 ├── manage.py
 ├── pyproject.toml      # Ruff configuration
 ├── requirements.txt
@@ -150,6 +160,41 @@ Returns `200` with the user data (`id`, `username`, `email`) and sets the cookie
 
 **Logout** / **Token refresh** – no request body, the cookies are sent automatically. Both return `401` if the `refresh_token` cookie is missing or invalid.
 
+## Quizzes
+
+> **Work in progress** – the models are in place, the endpoints are currently being implemented.
+
+A quiz is generated from a YouTube video: the audio is downloaded with yt-dlp, transcribed with Whisper and turned into multiple-choice questions. Users can only see and edit their own quizzes.
+
+### Data model
+
+| Model      | Fields                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------ |
+| `Quiz`     | `creator` (FK User), `title`, `description`, `video_url`, `created_at`, `updated_at`             |
+| `Question` | `quiz` (FK Quiz), `question_title`, `question_options` (list of 4), `answer`, `created_at`, `updated_at` |
+
+Deleting a quiz also deletes all its questions.
+
+### Endpoints
+
+| Method | Endpoint              | Description                                       |
+| ------ | --------------------- | ------------------------------------------------- |
+| POST   | `/api/quizzes/`       | Create a quiz from a YouTube URL                  |
+| GET    | `/api/quizzes/`       | List all quizzes of the current user              |
+| GET    | `/api/quizzes/{id}/`  | Retrieve a single quiz                            |
+| PATCH  | `/api/quizzes/{id}/`  | Update `title` and/or `description`               |
+| DELETE | `/api/quizzes/{id}/`  | Delete a quiz including its questions             |
+
+**Create quiz** – request body:
+
+```json
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID"
+}
+```
+
+Returns `201` with the full quiz including its questions, `400` for an invalid URL. Detail endpoints return `403` if the quiz belongs to another user and `404` if it does not exist. `DELETE` returns `204` without a body.
+
 ## Testing & Linting
 
 Run the test suite:
@@ -169,8 +214,8 @@ ruff check .
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request to `main`:
 
 1. Lint with ruff
-2. Django system check
-3. Check for missing migrations
+2. Generate migrations (they are not part of the repository)
+3. Django system check
 4. Run the test suite
 
 ## Frontend Connection
