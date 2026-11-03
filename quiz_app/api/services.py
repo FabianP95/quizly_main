@@ -1,3 +1,64 @@
+"""Placeholder fil for various code snippets. In the end this file is responsible for getting the quiz data from yt into whipser and then transforming it to an acutal quiz"""
+
+QUIZ_DATA = {
+    "title": "Quiz Title",
+    "description": "Quiz Description",
+    "video_url": "https://www.youtube.com/watch?v=example",
+    "questions": [
+        {
+            "question_title": "Question 1",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 2",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 3",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 4",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 5",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 6",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 7",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 8",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 9",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 10",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+    ],
+}
+
+
 import json
 
 import yt_dlp
@@ -5,14 +66,19 @@ from google import genai
 
 from core.settings import GEMINI_API_KEY
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+def generate_quiz_from_url(url):
+    
+    return QUIZ_DATA
+    
+    #client = genai.Client(api_key=GEMINI_API_KEY)
 
-interaction = client.interactions.create(
-    model="gemini-3.8-flash", input="say 1"
-)
-print(interaction.output_text)
+    #interaction = client.interactions.create(model="gemini-3.8-flash", input="say 1")
+    #print(interaction.output_text)
 
-client.close()
+    #client.close()
+    
+
+
 
 """ URL = "https://www.youtube.com/watch?v=YE7VzlLtp-4"
 tmp_filename = "placeholder"

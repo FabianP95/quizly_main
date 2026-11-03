@@ -155,7 +155,7 @@ class QuizDetailTests(QuizTestsBase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_get_quiz_detail_of_other_user(self):
-        response = self.client.get(self.other_detail_url, format="json")
+        response = self.client.get(self.second_quiz_url, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_get_quiz_detail_not_found(self):
@@ -211,7 +211,7 @@ class QuizUpdateTests(QuizTestsBase):
 
     def test_patch_quiz_invalid_data(self):
         response = self.client.patch(
-            self.detail_quiz_url, {"title": "x" * 201}, format="json"
+            self.detail_quiz_url, {"title": "x" * 256}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
