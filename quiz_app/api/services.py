@@ -1,5 +1,6 @@
 """Placeholder fil for various code snippets. In the end this file is responsible for getting the quiz data from yt into whipser and then transforming it to an acutal quiz"""
-
+class QuizGenerationError(Exception):
+    pass
 QUIZ_DATA = {
     "title": "Quiz Title",
     "description": "Quiz Description",
@@ -59,12 +60,8 @@ QUIZ_DATA = {
 }
 
 
-import json
 
-import yt_dlp
-from google import genai
 
-from core.settings import GEMINI_API_KEY
 
 def generate_quiz_from_url(url):
     

@@ -1,9 +1,11 @@
+from copy import deepcopy
 from unittest.mock import patch
 
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from quiz_app.api.services import QUIZ_DATA
 from quiz_app.models import Question, Quiz
 from user_auth_app.models import User
 
@@ -101,7 +103,7 @@ class QuizListTests(QuizTestsBase):
 class QuizCreateTests(QuizTestsBase):
 
     def service_function_offline(self, *args, **kwargs):
-        return create_quiz(self.user, "Offline Quiz")
+        return deepcopy(QUIZ_DATA)
 
     def test_create_quiz(self):
         with patch(SERVICE_PATH, side_effect=self.service_function_offline) as mock:
@@ -146,7 +148,7 @@ class QuizDetailTests(QuizTestsBase):
 
     def test_get_quiz_detail_result_keys(self):
         response = self.client.get(self.detail_quiz_url, format="json")
-        self.assertEqual(set(response.data.keys(), QUIZ_KEYS))
+        self.assertEqual(set(response.data.keys()), QUIZ_KEYS)
         self.assertEqual(set(response.data["questions"][0].keys()), QUESTION_KEYS)
 
     def test_get_quiz_without_cookies(self):
@@ -215,29 +217,30 @@ class QuizUpdateTests(QuizTestsBase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    class QuizDeleteTests(QuizTestsBase):
 
-        def test_delete_quiz(self):
-            response = self.client.delete(self.detail_quiz_url)
-            self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-            self.assertFalse(Quiz.objects.filter(id=self.quiz.id).exists())
+class QuizDeleteTests(QuizTestsBase):
 
-        def test_deleted_question_when_quiz_deleted(self):
-            self.client.delete(self.detail_quiz_url)
-            self.assertFalse(Question.objects.filter(quiz=self.quiz.id).exists())
+    def test_delete_quiz(self):
+        response = self.client.delete(self.detail_quiz_url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Quiz.objects.filter(id=self.quiz.id).exists())
 
-        def test_delete_quiz_without_cookies(self):
-            self.client.cookies.clear()
-            response = self.client.delete(self.detail_quiz_url)
-            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-            self.assertTrue(Quiz.objects.filter(id=self.quiz.id).exists())
+    def test_deleted_question_when_quiz_deleted(self):
+        self.client.delete(self.detail_quiz_url)
+        self.assertFalse(Question.objects.filter(quiz=self.quiz.id).exists())
 
-        def test_delete_quiz_of_other_user(self):
-            response = self.client.delete(self.second_quiz_url)
-            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-            self.assertTrue(Quiz.objects.filter(id=self.second_quiz.id).exists())
+    def test_delete_quiz_without_cookies(self):
+        self.client.cookies.clear()
+        response = self.client.delete(self.detail_quiz_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(Quiz.objects.filter(id=self.quiz.id).exists())
 
-        def test_delete_quiz_not_found(self):
-            url = reverse("quizzes-detail", kwargs={"pk": 35})
-            response = self.client.delete(url)
-            self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    def test_delete_quiz_of_other_user(self):
+        response = self.client.delete(self.second_quiz_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Quiz.objects.filter(id=self.second_quiz.id).exists())
+
+    def test_delete_quiz_not_found(self):
+        url = reverse("quizzes-detail", kwargs={"pk": 35})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

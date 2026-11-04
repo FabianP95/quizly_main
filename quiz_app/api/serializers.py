@@ -1,7 +1,9 @@
 import re
+
+from django.db import transaction
 from rest_framework import serializers
 
-from quiz_app.models import Quiz, Question
+from quiz_app.models import Question, Quiz
 
 YOUTUBE_URL_PATTERN = (
     r"^https://"
@@ -71,3 +73,13 @@ class QuizPostSerializer(QuizSerializer):
             raise serializers.ValidationError("Only links from Youtube are allowed")
         video_id = test.group(1)
         return f"https://www.youtube.com/watch?v={video_id}"
+    
+    def create(self,validated_data):
+        questions_data = validated_data.pop("questions")
+       
+        with transaction.atomic():
+            quiz = Quiz.objects.create(**validated_data)  
+            for question in questions_data:
+                Question.objects.create(quiz=quiz, **question)
+        return quiz
+        
