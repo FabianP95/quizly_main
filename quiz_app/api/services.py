@@ -1,6 +1,26 @@
-"""Placeholder fil for various code snippets. In the end this file is responsible for getting the quiz data from yt into whipser and then transforming it to an acutal quiz"""
+"""Placeholder fil for various code snippets. In the end this file is responsible for getting the quiz data from yt into whipser and then transforming it to an actual quiz"""
+
+import json
+import yt_dlp
+import whisper
+from google import genai 
+from django.conf import settings
+
+
+
+tmp_filename = "placeholder"
+ydl_opts = {
+    "format": "bestaudio/best",
+    "outtmpl": tmp_filename,
+    "quiet": True,
+    "noplaylist": True,
+}
+
+
 class QuizGenerationError(Exception):
     pass
+
+
 QUIZ_DATA = {
     "title": "Quiz Title",
     "description": "Quiz Description",
@@ -59,80 +79,61 @@ QUIZ_DATA = {
     ],
 }
 
+QUIZ_PROMPT = """Based on the following transcript, generate a quiz in valid JSON format. The quiz must follow this exact structure:
+                {{ 
+                      "title": "Create a concise quiz title based on the topic of the transcript.",
+                      "description": "Summarize the transcript in no more than 150 characters. Do not include any quiz questions or answers.",
+                      "questions": [
+                        {{
+                          "question_title": "The question goes here.",
+                          "question_options": ["Option A", "Option B", "Option C", "Option D"],
+                          "answer": "The correct answer from the above options"
+                        }},
+                        ...
+                        (exactly 10 questions)
+                      ]                  
+                    }}                 
+                    Requirements:                 
+                    - Each question must have exactly 4 distinct answer options.                 
+                    - Only one correct answer is allowed per question, and it must be present in 'question_options'.
+                    - The output must be valid JSON and parsable as-is (e.g., using Python's json.loads).
+                    - Do not include explanations, comments, or any text outside the JSON. """
 
-
-
+def validate_quiz_data(data):
+    pass
 
 def generate_quiz_from_url(url):
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    audio_file= json.dumps(ydl.sanitize_info(info))
+    model = whisper.load_model("turbo")
+    result = model.transcribe(audio_file)
+   
     
-    return QUIZ_DATA
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
     
-    #client = genai.Client(api_key=GEMINI_API_KEY)
-
-    #interaction = client.interactions.create(model="gemini-3.8-flash", input="say 1")
-    #print(interaction.output_text)
-
-    #client.close()
+    interaction = client.interactions.create(model="gemini-3.8-flash", input=QUIZ_PROMPT,result)
+    quiz=interaction.output_text
     
+    client.close()
+    try:
+            validate_quiz_data(quiz)
+    except QuizGenerationError:
+        return raise()
+    
+    return quiz
+  
+
+     
 
 
 
-""" URL = "https://www.youtube.com/watch?v=YE7VzlLtp-4"
-tmp_filename = "placeholder"
-# ℹ️ See help(yt_dlp.YoutubeDL) for a list of available options and public functions
-ydl_opts = {
-    "format": "bestaudio/best",
-    "outtmpl": tmp_filename,
-    "quiet": True,
-    "noplaylist": True,
-}
-
-with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-    info = ydl.extract_info(URL, download=False)
-
-    # ℹ️ ydl.sanitize_info makes the info json-serializable
-    print(json.dumps(ydl.sanitize_info(info))) """
-
-# Bitte beachte ebenfalls, dass die Adresse der URL, die wir speichern, exakt so aussehen muss. Du musst wie im Video erwähnt die ID extrahieren und den URL- Pfad so aufbauen. Denn wie im Video erwähnt, weißt du nie, wie das Frontend die zu verwendende URL empfängt.
-# https://www.youtube.com/watch?v=ID-DES-VIDEOS
 
 
-""" Based on the following transcript, generate a quiz in valid JSON format.
 
-The quiz must follow this exact structure:
 
-{{
 
-  "title": "Create a concise quiz title based on the topic of the transcript.",
 
-  "description": "Summarize the transcript in no more than 150 characters. Do not include any quiz questions or answers.",
 
-  "questions": [
 
-    {{
-
-      "question_title": "The question goes here.",
-
-      "question_options": ["Option A", "Option B", "Option C", "Option D"],
-
-      "answer": "The correct answer from the above options"
-
-    }},
-
-    ...
-
-    (exactly 10 questions)
-
-  ]
-
-}}
-
-Requirements:
-
-- Each question must have exactly 4 distinct answer options.
-
-- Only one correct answer is allowed per question, and it must be present in 'question_options'.
-
-- The output must be valid JSON and parsable as-is (e.g., using Python's json.loads).
-
-- Do not include explanations, comments, or any text outside the JSON. """
