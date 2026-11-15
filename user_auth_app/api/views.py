@@ -78,6 +78,15 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        """Blacklist the refresh token and delete the auth cookies.
+
+        Args:
+            request: The incoming request containing the auth cookies.
+
+        Returns:
+            Response: 200 with a success message, or 401 if no refresh token
+            cookie is set.
+        """
         refresh_token = request.COOKIES.get("refresh_token")
         if refresh_token is None:
             return Response(
@@ -114,6 +123,15 @@ class LogoutView(APIView):
 class CookieTokenRefreshView(TokenRefreshView):
 
     def post(self, request, *args, **kwargs):
+        """Create a new access token from the refresh token cookie.
+
+        Args:
+            request: The incoming request containing the refresh token cookie.
+
+        Returns:
+            Response: 200 and sets a new "access_token" cookie, or 401 if the
+            refresh token is missing or invalid.
+        """
         refresh_token = request.COOKIES.get("refresh_token")
         if refresh_token is None:
             return Response(

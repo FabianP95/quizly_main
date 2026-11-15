@@ -5,7 +5,6 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from quiz_app.api.services import QUIZ_DATA
 from quiz_app.models import Question, Quiz
 from user_auth_app.models import User
 
@@ -26,6 +25,64 @@ QUESTION_KEYS = {
     "answer",
 }
 
+QUIZ_DATA = {
+    "title": "Quiz Title",
+    "description": "Quiz Description",
+    "video_url": "https://www.youtube.com/watch?v=example",
+    "questions": [
+        {
+            "question_title": "Question 1",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 2",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 3",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 4",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 5",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 6",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 7",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 8",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 9",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+        {
+            "question_title": "Question 10",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        },
+    ],
+}
+
 QUESTION_KEYS_CREATE = QUESTION_KEYS | {"created_at", "updated_at"}
 
 VIDEO_URL = "https://www.youtube.com/watch?v=jNQXAC9IVRw"
@@ -33,6 +90,15 @@ SERVICE_PATH = "quiz_app.api.views.generate_quiz_from_url"
 
 
 def create_quiz(creator, title):
+    """Create a quiz with two questions for the given user.
+
+    Args:
+        creator (User): The user who owns the quiz.
+        title (str): The title of the quiz.
+
+    Returns:
+        Quiz: The created quiz instance.
+    """
 
     quiz = Quiz.objects.create(
         creator=creator,
@@ -53,6 +119,7 @@ def create_quiz(creator, title):
 class QuizTestsBase(APITestCase):
 
     def setUp(self):
+        """Create two users with one quiz each, log in the first user and build the urls."""
         self.url = reverse("quizzes-list")
 
         self.user = User.objects.create_user(
@@ -77,25 +144,30 @@ class QuizTestsBase(APITestCase):
 
 class QuizListTests(QuizTestsBase):
     def test_get_quizzes(self):
+        """Test that the quiz list returns 200 for a logged in user."""
         response = self.client.get(self.url, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_get_quizzes_without_cookies(self):
+        """Test that the quiz list returns 401 without auth cookies."""
         self.client.cookies.clear()
         response = self.client.get(self.url, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_get_quizzes_result_keys(self):
+        """Test that the quiz list returns the expected quiz and question keys."""
         response = self.client.get(self.url, format="json")
         self.assertEqual(set(response.data[0].keys()), QUIZ_KEYS)
         self.assertEqual(set(response.data[0]["questions"][0].keys()), QUESTION_KEYS)
 
     def test_get_only_own_quizzes(self):
+        """Test that the quiz list only contains the quizzes of the current user."""
         response = self.client.get(self.url, format="json")
         self.assertEqual(response.data[0]["id"], self.quiz.id)
         self.assertNotEqual(response.data[0]["id"], self.second_quiz.id)
 
     def test_get_questions_belonging_to_quiz(self):
+        """Test that a quiz in the list contains all of its questions."""
         response = self.client.get(self.url, format="json")
         self.assertEqual(len(response.data[0]["questions"]), 2)
 
@@ -103,15 +175,18 @@ class QuizListTests(QuizTestsBase):
 class QuizCreateTests(QuizTestsBase):
 
     def service_function_offline(self, *args, **kwargs):
+        """Replace the quiz generation service and return a copy of the test quiz data."""
         return deepcopy(QUIZ_DATA)
 
     def test_create_quiz(self):
+        """Test that creating a quiz returns 201 and calls the service once."""
         with patch(SERVICE_PATH, side_effect=self.service_function_offline) as mock:
             response = self.client.post(self.url, {"url": VIDEO_URL}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         mock.assert_called_once()
 
     def test_create_quiz_result_keys(self):
+        """Test that the created quiz returns the expected quiz and question keys."""
         with patch(SERVICE_PATH, side_effect=self.service_function_offline):
             response = self.client.post(self.url, {"url": VIDEO_URL}, format="json")
         self.assertEqual(set(response.data.keys()), QUIZ_KEYS)
@@ -120,19 +195,23 @@ class QuizCreateTests(QuizTestsBase):
         )
 
     def test_create_quiz_without_cookies(self):
+        """Test that creating a quiz returns 401 without auth cookies."""
         self.client.cookies.clear()
         response = self.client.post(self.url, {"url": VIDEO_URL}, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_create_quiz_missing_url(self):
+        """Test that creating a quiz without url returns 400."""
         response = self.client.post(self.url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_create_quiz_invalid_url(self):
+        """Test that creating a quiz with an invalid url returns 400."""
         response = self.client.post(self.url, {"url": "not-a-url"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_create_quiz_non_youtube_url(self):
+        """Test that creating a quiz with a non YouTube url returns 400."""
         response = self.client.post(
             self.url, {"url": "https://example.com/video"}, format="json"
         )
@@ -142,25 +221,30 @@ class QuizCreateTests(QuizTestsBase):
 class QuizDetailTests(QuizTestsBase):
 
     def test_get_quiz_detail(self):
+        """Test that the quiz detail returns 200 and the requested quiz."""
         response = self.client.get(self.detail_quiz_url, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["id"], self.quiz.id)
 
     def test_get_quiz_detail_result_keys(self):
+        """Test that the quiz detail returns the expected quiz and question keys."""
         response = self.client.get(self.detail_quiz_url, format="json")
         self.assertEqual(set(response.data.keys()), QUIZ_KEYS)
         self.assertEqual(set(response.data["questions"][0].keys()), QUESTION_KEYS)
 
     def test_get_quiz_without_cookies(self):
+        """Test that the quiz detail returns 401 without auth cookies."""
         self.client.cookies.clear()
         response = self.client.get(self.detail_quiz_url, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_get_quiz_detail_of_other_user(self):
+        """Test that the quiz detail of another user returns 403."""
         response = self.client.get(self.second_quiz_url, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_get_quiz_detail_not_found(self):
+        """Test that the detail of a non existing quiz returns 404."""
         url = reverse("quizzes-detail", kwargs={"pk": 33})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
@@ -169,6 +253,7 @@ class QuizDetailTests(QuizTestsBase):
 class QuizUpdateTests(QuizTestsBase):
 
     def test_patch_quiz(self):
+        """Test that patching title and description updates the quiz."""
         data = {"title": "New Title", "description": "New description"}
         response = self.client.patch(self.detail_quiz_url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -177,6 +262,7 @@ class QuizUpdateTests(QuizTestsBase):
         self.assertEqual(self.quiz.description, "New description")
 
     def test_patch_quiz_partial(self):
+        """Test that patching only the title keeps the description unchanged."""
         response = self.client.patch(
             self.detail_quiz_url, {"title": "Only Title"}, format="json"
         )
@@ -186,12 +272,14 @@ class QuizUpdateTests(QuizTestsBase):
         self.assertEqual(self.quiz.description, "Some description")
 
     def test_patch_quiz_result_keys(self):
+        """Test that the patched quiz returns the expected quiz keys."""
         response = self.client.patch(
             self.detail_quiz_url, {"title": "New Title"}, format="json"
         )
         self.assertEqual(set(response.data.keys()), QUIZ_KEYS)
 
     def test_patch_quiz_without_cookies(self):
+        """Test that patching a quiz returns 401 without auth cookies."""
         self.client.cookies.clear()
         response = self.client.patch(
             self.detail_quiz_url, {"title": "Broken"}, format="json"
@@ -199,6 +287,7 @@ class QuizUpdateTests(QuizTestsBase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_patch_quiz_of_other_user(self):
+        """Test that patching a quiz of another user returns 403 and changes nothing."""
         response = self.client.patch(
             self.second_quiz_url, {"title": "Broken"}, format="json"
         )
@@ -207,11 +296,13 @@ class QuizUpdateTests(QuizTestsBase):
         self.assertEqual(self.second_quiz.title, "Second Quiz")
 
     def test_patch_quiz_not_found(self):
+        """Test that patching a non existing quiz returns 404."""
         url = reverse("quizzes-detail", kwargs={"pk": 36})
         response = self.client.patch(url, {"title": "X"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_patch_quiz_invalid_data(self):
+        """Test that patching a quiz with a too long title returns 400."""
         response = self.client.patch(
             self.detail_quiz_url, {"title": "x" * 256}, format="json"
         )
@@ -221,26 +312,31 @@ class QuizUpdateTests(QuizTestsBase):
 class QuizDeleteTests(QuizTestsBase):
 
     def test_delete_quiz(self):
+        """Test that deleting a quiz returns 204 and removes it from the database."""
         response = self.client.delete(self.detail_quiz_url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Quiz.objects.filter(id=self.quiz.id).exists())
 
     def test_deleted_question_when_quiz_deleted(self):
+        """Test that deleting a quiz also deletes its questions."""
         self.client.delete(self.detail_quiz_url)
         self.assertFalse(Question.objects.filter(quiz=self.quiz.id).exists())
 
     def test_delete_quiz_without_cookies(self):
+        """Test that deleting a quiz returns 401 without auth cookies and keeps it."""
         self.client.cookies.clear()
         response = self.client.delete(self.detail_quiz_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertTrue(Quiz.objects.filter(id=self.quiz.id).exists())
 
     def test_delete_quiz_of_other_user(self):
+        """Test that deleting a quiz of another user returns 403 and keeps it."""
         response = self.client.delete(self.second_quiz_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Quiz.objects.filter(id=self.second_quiz.id).exists())
 
     def test_delete_quiz_not_found(self):
+        """Test that deleting a non existing quiz returns 404."""
         url = reverse("quizzes-detail", kwargs={"pk": 35})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

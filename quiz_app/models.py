@@ -12,6 +12,7 @@ class Quiz(models.Model):
     video_url = models.URLField(max_length=255)
     
     def __str__(self):
+        """Return the title of the quiz and its creator."""
         return f"{self.title} by {self.creator}"
     
     
@@ -24,6 +25,7 @@ class Question(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
+        """Return the title of the question and the quiz it belongs to."""
         return f"{self.question_title} in {self.quiz}"
     
     

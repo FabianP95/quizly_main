@@ -67,6 +67,18 @@ class QuizPostSerializer(QuizSerializer):
         read_only_fields = ["title", "description", "video_url"]
 
     def validate_url(self, value):
+        """Validate that the given url is a YouTube link and normalize it.
+
+        Args:
+            value (str): The url sent by the client.
+
+        Returns:
+            str: The normalized url in the format
+            "https://www.youtube.com/watch?v=<video_id>".
+
+        Raises:
+            serializers.ValidationError: If the url is not a valid YouTube link.
+        """
 
         test = re.match(YOUTUBE_URL_PATTERN, value)
         if test is None:
@@ -75,6 +87,18 @@ class QuizPostSerializer(QuizSerializer):
         return f"https://www.youtube.com/watch?v={video_id}"
     
     def create(self,validated_data):
+        """Create a quiz together with all of its questions.
+
+        The creation runs inside a database transaction, so no quiz is saved
+        without its questions if something fails.
+
+        Args:
+            validated_data (dict): The validated quiz data including a
+                "questions" list with the question data.
+
+        Returns:
+            Quiz: The newly created quiz instance.
+        """
         questions_data = validated_data.pop("questions")
        
         with transaction.atomic():
