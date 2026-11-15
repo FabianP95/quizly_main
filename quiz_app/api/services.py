@@ -1,16 +1,17 @@
 """Placeholder fil for various code snippets. In the end this file is responsible for getting the quiz data from yt into whipser and then transforming it to an actual quiz"""
 
 import json
-import time
 import os
 import tempfile
+import time
 import uuid
-import yt_dlp
-import whisper
 from functools import lru_cache
+
+import whisper
+import yt_dlp
+from django.conf import settings
 from google import genai
 from google.genai import errors
-from django.conf import settings
 
 QUIZ_KEYS = {
     "title",
