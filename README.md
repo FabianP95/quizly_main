@@ -12,12 +12,48 @@ The frontend is maintained separately and is not part of this repository.
 - Simple JWT (authentication via HttpOnly cookies)
 - django-cors-headers
 - yt-dlp (download audio from YouTube videos)
-- OpenAI Whisper (local audio transcription)
+- OpenAI Whisper (local audio transcription, runs on PyTorch)
+- Google Gemini via `google-genai` (quiz generation from the transcript)
+- python-dotenv (loads environment variables from `.env`)
 - SQLite (development)
 
-### System requirements
+## Requirements
 
-- [FFmpeg](https://ffmpeg.org/download.html) must be installed and available on the `PATH` – it is required by yt-dlp and Whisper to process the audio files.
+Before installing the project, make sure the following is available on your machine:
+
+| Requirement        | Why it is needed                                                        |
+| ------------------ | ----------------------------------------------------------------------- |
+| Python 3.14        | Runtime for the backend                                                 |
+| FFmpeg             | Used by yt-dlp and Whisper to extract and decode the audio              |
+| Google Gemini API key | Used to generate the quiz questions from the transcript             |
+| JavaScript runtime (e.g. [Deno](https://deno.com/)) – recommended | Used by yt-dlp (`yt-dlp-ejs`) to solve YouTube's JS challenges; without it some downloads may fail |
+| ~3 GB free disk space | PyTorch plus the Whisper `turbo` model (~1.5 GB)                    |
+
+### FFmpeg
+
+[FFmpeg](https://ffmpeg.org/download.html) must be installed and available on the `PATH`.
+
+- Windows: `winget install ffmpeg` (or download a build and add its `bin` folder to the `PATH`)
+- macOS: `brew install ffmpeg`
+- Linux (Debian/Ubuntu): `sudo apt install ffmpeg`
+
+Check the installation with:
+
+```bash
+ffmpeg -version
+```
+
+### Whisper model
+
+Whisper is installed via `requirements.txt` (`openai-whisper`), no separate installation is needed. On the **first** quiz generation the `turbo` model is downloaded automatically (~1.5 GB, cached in `~/.cache/whisper`), so the first request takes noticeably longer. Transcription runs locally – a CUDA capable GPU speeds it up considerably, but the CPU works as well.
+
+### Google Gemini API key
+
+1. Sign in at [Google AI Studio](https://aistudio.google.com/)
+2. Create a new key under **Get API key**
+3. Add it as `GEMINI_API_KEY` to your `.env` file (see [Configure environment variables](#4-configure-environment-variables))
+
+The free tier is sufficient for development. If a model is temporarily unavailable, the backend automatically retries with a fallback model.
 
 ## Project Structure
 
@@ -32,7 +68,6 @@ quizly_main/
 │   ├── api/            # Serializers, views, URLs, services (YouTube download / transcription)
 │   ├── tests/          # Tests for the quiz endpoints
 │   └── models.py       # Quiz and Question models
-├── media/              # Temporary media files (e.g. downloaded audio)
 ├── manage.py
 ├── pyproject.toml      # Ruff configuration
 ├── requirements.txt
@@ -84,6 +119,7 @@ cp .env.template .env
 | ------------------- | ------------------------------- |
 | `DJANGO_SECRET_KEY` | Django secret key               |
 | `DJANGO_DEBUG`      | `True` for local development    |
+| `GEMINI_API_KEY`    | API key from Google AI Studio   |
 
 A new secret key can be generated with:
 
@@ -162,9 +198,13 @@ Returns `200` with the user data (`id`, `username`, `email`) and sets the cookie
 
 ## Quizzes
 
-> **Work in progress** – the models are in place, the endpoints are currently being implemented.
+A quiz is generated from a YouTube video in three steps:
 
-A quiz is generated from a YouTube video: the audio is downloaded with yt-dlp, transcribed with Whisper and turned into multiple-choice questions. Users can only see and edit their own quizzes.
+1. **Download** – the audio track is downloaded with yt-dlp into the system's temporary directory (`tempfile.gettempdir()`, e.g. `%TEMP%` on Windows, `/tmp` on Linux)
+2. **Transcribe** – the audio is transcribed locally with Whisper; the temporary audio file is deleted afterwards
+3. **Generate** – the transcript is sent to Google Gemini, which returns a quiz with 10 multiple-choice questions. The response is validated before the quiz is saved
+
+No audio files are stored permanently in the project. Users can only see and edit their own quizzes.
 
 ### Data model
 
@@ -193,7 +233,7 @@ Deleting a quiz also deletes all its questions.
 }
 ```
 
-Returns `201` with the full quiz including its questions, `400` for an invalid URL. Detail endpoints return `403` if the quiz belongs to another user and `404` if it does not exist. `DELETE` returns `204` without a body.
+Returns `201` with the full quiz including its questions, `400` for an invalid URL and `500` if the quiz could not be generated (download, transcription or Gemini failed). Detail endpoints return `403` if the quiz belongs to another user and `404` if it does not exist. `DELETE` returns `204` without a body.
 
 ## Testing & Linting
 
