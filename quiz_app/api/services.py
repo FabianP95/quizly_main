@@ -5,7 +5,6 @@ Gemini generate a validated quiz from the transcript.
 """
 
 import json
-import logging
 import os
 import tempfile
 import uuid
@@ -18,8 +17,6 @@ from django.conf import settings
 from google import genai
 from google.genai import _interactions as interaction_errors
 from google.genai import errors, types
-
-logger = logging.getLogger(__name__)
 
 QUIZ_KEYS = {
     "title",
@@ -183,8 +180,6 @@ def generate_quiz_by_agent(transcript, url):
     try:
         for model in AGENT_MODELS:
             try:
-                print(model)
-                print(last_error)
                 interaction = client.interactions.create(
                     model=model,
                     input=prompt,
@@ -202,7 +197,6 @@ def generate_quiz_by_agent(transcript, url):
             except FATAL_AGENT_ERRORS as error:
                 raise QuizGenerationError("Gemini rejected the request") from error
             except (*RETRYABLE_AGENT_ERRORS, QuizGenerationError) as error:
-                logger.warning("Quiz generation with %s failed: %s", model, error)
                 last_error = error
     finally:
         client.close()
