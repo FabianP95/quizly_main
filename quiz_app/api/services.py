@@ -1,17 +1,25 @@
-"""Placeholder fil for various code snippets. In the end this file is responsible for getting the quiz data from yt into whipser and then transforming it to an actual quiz"""
+"""Services for generating a quiz from a YouTube video.
+
+Downloads the audio of the video, transcribes it with Whisper and lets
+Gemini generate a validated quiz from the transcript.
+"""
 
 import json
+import logging
 import os
 import tempfile
-import time
 import uuid
+from contextlib import suppress
 from functools import lru_cache
 
 import whisper
 import yt_dlp
 from django.conf import settings
 from google import genai
-from google.genai import errors
+from google.genai import _interactions as interaction_errors
+from google.genai import errors, types
+
+logger = logging.getLogger(__name__)
 
 QUIZ_KEYS = {
     "title",
@@ -32,7 +40,23 @@ AGENT_MODELS = [
     "gemini-3.5-flash-lite",
 ]
 
-RETRY_DELAY_SECONDS = 5
+
+AGENT_TIMEOUT_SECONDS = 20
+
+
+FATAL_AGENT_ERRORS = (
+    interaction_errors.AuthenticationError,
+    interaction_errors.PermissionDeniedError,
+    interaction_errors.BadRequestError,
+)
+
+
+RETRYABLE_AGENT_ERRORS = (
+    interaction_errors.APIError,
+    errors.APIError,
+)
+
+WHISPER_MODEL = "base"
 
 
 class QuizGenerationError(Exception):
@@ -65,12 +89,12 @@ QUIZ_PROMPT = """Based on the following transcript, generate a quiz in valid JSO
 
 @lru_cache(maxsize=1)
 def get_whisper_model():
-    """Load the Whisper "turbo" model once and cache it.
+    """Load the Whisper model defined in WHISPER_MODEL once and cache it.
 
     Returns:
         whisper.Whisper: The loaded Whisper model instance.
     """
-    return whisper.load_model("turbo")
+    return whisper.load_model(WHISPER_MODEL)
 
 
 def download_audio(url):
@@ -113,38 +137,54 @@ def transcribe_audio(path):
         str: The transcribed text of the audio file.
 
     Raises:
-        QuizGenerationError: If Whisper fails to transcribe the audio.
+        QuizGenerationError: If Whisper fails to transcribe the audio or the
+            transcript is too short to generate a quiz.
     """
     try:
-        result = get_whisper_model().transcribe(path)
-        return result["text"]
+        model = get_whisper_model()
+        result = model.transcribe(path, fp16=model.device.type == "cuda")
     except Exception as error:
         raise QuizGenerationError("Whisper failed transcribing the audio") from error
     finally:
-        os.remove(path)
+        with suppress(FileNotFoundError):
+            os.remove(path)
+
+    transcript = result["text"].strip()
+    if len(transcript) < 100:
+        raise QuizGenerationError("Transcript is too short to generate a quiz")
+    return transcript
 
 
-def generate_quiz_by_agent(transcript):
-    """Generate a quiz as a JSON string from a transcript using Gemini.
+def generate_quiz_by_agent(transcript, url):
+    """Generate a validated quiz from a transcript using Gemini.
 
-    The models in AGENT_MODELS are tried one after another. Between the
-    attempts the function waits with an increasing delay.
+    The models in AGENT_MODELS are tried one after another. A model is
+    skipped if the API fails, the response is empty or the returned quiz
+    is invalid. Errors that can't be fixed by another model abort directly.
 
     Args:
         transcript (str): The transcript of the video.
+        url (str): The url of the YouTube video.
 
     Returns:
-        str: The raw JSON string of the generated quiz.
+        dict: The validated quiz data.
 
     Raises:
-        QuizGenerationError: If all models failed or returned an empty response.
+        QuizGenerationError: If the request was rejected or all models failed.
     """
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    client = genai.Client(
+        api_key=settings.GEMINI_API_KEY,
+        http_options=types.HttpOptions(
+            retry_options=types.HttpRetryOptions(attempts=1, http_status_codes=[408]),
+        ),
+    )
     prompt = QUIZ_PROMPT.format(transcript=transcript)
     last_error = None
     try:
-        for attempt, model in enumerate(AGENT_MODELS, start=1):
+        for model in AGENT_MODELS:
             try:
+                print(model)
+                print(last_error)
                 interaction = client.interactions.create(
                     model=model,
                     input=prompt,
@@ -152,15 +192,18 @@ def generate_quiz_by_agent(transcript):
                         "type": "text",
                         "mime_type": "application/json",
                     },
+                    timeout=AGENT_TIMEOUT_SECONDS,
                 )
-                quiz = interaction.output_text
-                if quiz:
-                    return quiz
-                last_error = QuizGenerationError(f"Empty response from {model}")
-            except errors.APIError as error:
+                raw_quiz = interaction.output_text
+                if not raw_quiz:
+                    raise QuizGenerationError(f"Empty response from {model}")
+                quiz = transform_quiz(raw_quiz, url)
+                return validate_quiz(quiz)
+            except FATAL_AGENT_ERRORS as error:
+                raise QuizGenerationError("Gemini rejected the request") from error
+            except (*RETRYABLE_AGENT_ERRORS, QuizGenerationError) as error:
+                logger.warning("Quiz generation with %s failed: %s", model, error)
                 last_error = error
-            if attempt < len(AGENT_MODELS):
-                time.sleep(RETRY_DELAY_SECONDS * attempt)
     finally:
         client.close()
 
@@ -180,13 +223,13 @@ def transform_quiz(raw, url):
         dict: The quiz data including the "video_url" key.
 
     Raises:
-        QuizGenerationError: If the string is not valid JSON.
+        QuizGenerationError: If the string is not valid JSON or not a JSON object.
     """
     try:
         quiz = json.loads(raw)
         quiz["video_url"] = url
         return quiz
-    except json.JSONDecodeError as error:
+    except (json.JSONDecodeError, TypeError) as error:
         raise QuizGenerationError(
             "Could not generate valid JSON from string"
         ) from error
@@ -248,8 +291,8 @@ def validate_quiz(data):
 def generate_quiz_from_url(url):
     """Run the whole workflow to generate a quiz from a YouTube url.
 
-    Downloads the audio, transcribes it, lets the agent generate the quiz,
-    parses the result and validates it.
+    Downloads the audio, transcribes it and lets the agent generate a
+    validated quiz.
 
     Args:
         url (str): The url of the YouTube video.
@@ -262,7 +305,4 @@ def generate_quiz_from_url(url):
     """
     path = download_audio(url)
     transcript = transcribe_audio(path)
-    raw_quiz = generate_quiz_by_agent(transcript)
-    quiz = transform_quiz(raw_quiz, url)
-    quiz = validate_quiz(quiz)
-    return quiz
+    return generate_quiz_by_agent(transcript, url)
