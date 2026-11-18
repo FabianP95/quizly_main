@@ -48,9 +48,9 @@ class QuizView(viewsets.ModelViewSet):
         url = serializer.validated_data["video_url"]
         try:
             quiz_data = generate_quiz_from_url(url)
-        except QuizGenerationError:
+        except QuizGenerationError as error:
             return Response(
-                {"detail": "Something went wrong in generating the quiz"},
+                 {"detail": f"Error {error.status_code}: {error}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
