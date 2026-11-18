@@ -57,7 +57,9 @@ WHISPER_MODEL = "base"
 
 
 class QuizGenerationError(Exception):
-    pass
+    def __init__(self, message, status_code=500):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 QUIZ_PROMPT = """Based on the following transcript, generate a quiz in valid JSON format. The quiz must follow this exact structure:
@@ -120,7 +122,7 @@ def download_audio(url):
         return audio_path
     except yt_dlp.utils.DownloadError as error:
         raise QuizGenerationError(
-            "Could not download audio from youtube url"
+            "Could not download audio from youtube url", status_code=400
         ) from error
 
 
@@ -148,7 +150,9 @@ def transcribe_audio(path):
 
     transcript = result["text"].strip()
     if len(transcript) < 100:
-        raise QuizGenerationError("Transcript is too short to generate a quiz")
+        raise QuizGenerationError(
+            "Transcript is too short to generate a quiz", status_code=422
+        )
     return transcript
 
 
@@ -195,14 +199,19 @@ def generate_quiz_by_agent(transcript, url):
                 quiz = transform_quiz(raw_quiz, url)
                 return validate_quiz(quiz)
             except FATAL_AGENT_ERRORS as error:
-                raise QuizGenerationError("Gemini rejected the request") from error
+                raise QuizGenerationError(
+                    "Gemini rejected the request",
+                    status_code=getattr(error, "status_code", 502),
+                ) from error
             except (*RETRYABLE_AGENT_ERRORS, QuizGenerationError) as error:
                 last_error = error
     finally:
         client.close()
 
     raise QuizGenerationError(
-        f"Quiz generation failed after {len(AGENT_MODELS)} attempts"
+        f"Quiz generation failed after {len(AGENT_MODELS)} attempts: {last_error}",
+        status_code=getattr(last_error, "status_code", None)
+        or getattr(last_error, "code", 502),
     ) from last_error
 
 
